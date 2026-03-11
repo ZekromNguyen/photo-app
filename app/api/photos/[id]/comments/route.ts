@@ -49,6 +49,7 @@ export async function POST(
     return NextResponse.json(comment, { status: 201 });
   } catch (err) {
     console.error("POST /api/photos/[id]/comments error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

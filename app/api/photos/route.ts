@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(photo, { status: 201 });
   } catch (err) {
     console.error("POST /api/photos error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -96,6 +97,7 @@ export async function GET() {
     return NextResponse.json(photos);
   } catch (err) {
     console.error("GET /api/photos error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
