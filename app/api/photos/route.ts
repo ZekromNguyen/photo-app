@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
-
-// Use /tmp/uploads so this works on both local dev and read-only filesystems
-// (e.g. Vercel). Files are not persistent across cold starts, which is fine
-// per project requirements ("images don't need to be persistent").
-const UPLOADS_DIR = path.join("/tmp", "uploads");
 
 const DUMMY_USER_ID = 1;
 
@@ -39,7 +33,10 @@ const uploadSchema = z.object({
     .instanceof(File)
     .refine((f) => f.size > 0, "File is required")
     .refine((f) => f.size <= MAX_FILE_SIZE, "File size must be 10MB or less")
-    .refine((f) => ALLOWED_MIME_TYPES.has(f.type), "Only image files are allowed (JPEG, PNG, GIF, WebP, AVIF)"),
+    .refine(
+      (f) => ALLOWED_MIME_TYPES.has(f.type),
+      "Only image files are allowed (JPEG, PNG, GIF, WebP, AVIF)"
+    ),
 });
 
 export async function POST(request: NextRequest) {
@@ -59,9 +56,7 @@ export async function POST(request: NextRequest) {
     const ext = path.extname(validFile.name) || ".jpg";
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
 
-    await mkdir(UPLOADS_DIR, { recursive: true });
     const buffer = Buffer.from(await validFile.arrayBuffer());
-    await writeFile(path.join(UPLOADS_DIR, filename), buffer);
 
     await ensureDummyUser();
 
@@ -69,11 +64,16 @@ export async function POST(request: NextRequest) {
       data: {
         url: `/api/uploads/${filename}`,
         filename: validFile.name,
+        data: buffer,
+        mimeType: validFile.type,
         userId: DUMMY_USER_ID,
       },
     });
 
-    return NextResponse.json(photo, { status: 201 });
+    return NextResponse.json(
+      { id: photo.id, url: photo.url, filename: photo.filename, createdAt: photo.createdAt },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("POST /api/photos error:", err);
     const msg = err instanceof Error ? err.message : "Internal server error";
@@ -85,12 +85,16 @@ export async function GET() {
   try {
     const photos = await prisma.photo.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        url: true,
+        filename: true,
+        createdAt: true,
+        user: { select: { name: true } },
         comments: {
           orderBy: { createdAt: "asc" },
           include: { user: { select: { name: true } } },
         },
-        user: { select: { name: true } },
       },
     });
 

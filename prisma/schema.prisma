@@ -28,6 +28,8 @@ model Photo {
   id        Int       @id @default(autoincrement())
   url       String
   filename  String?
+  data      Bytes?
+  mimeType  String?
   createdAt DateTime  @default(now())
 
   userId    Int
