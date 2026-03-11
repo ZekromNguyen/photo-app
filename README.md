@@ -1,24 +1,126 @@
-# Photo Gallery App
+# 📸 Photo Gallery App
 
-A full-stack Next.js application where users can upload photos and add comments to them.
+> A full-stack Next.js application for uploading photos and adding comments — built as a job assignment for Qode.
 
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router, TypeScript)
-- **UI**: Ant Design v6 + Tailwind CSS v4
-- **ORM**: Prisma v7
-- **Database**: PostgreSQL
-- **Validation**: Zod
-- **File storage**: `/tmp/uploads` (served via API route — works on any platform)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma)](https://prisma.io)
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://vercel.com)
 
 ## Features
 
-- Upload photos (JPEG, PNG, GIF, WebP, AVIF)
-- View all uploaded photos in a responsive gallery grid
-- Add comments to any photo
-- Comments and photos are persisted in PostgreSQL
+- 📤 **Upload photos** — drag-and-drop or click to select (JPEG, PNG, GIF, WebP, AVIF, max 10 MB)
+- 🖼️ **Gallery view** — responsive grid showing all uploaded photos
+- 💬 **Comments** — add comments to any photo, persisted in PostgreSQL
+- 🗄️ **Database storage** — images stored as binary in PostgreSQL (works on serverless / Vercel)
 
-> **Note on images**: Uploaded files are stored in `/tmp/uploads/` and served via `/api/uploads/[filename]`. On serverless platforms (e.g. Vercel) the file system is ephemeral — images are lost on cold starts. This is intentional per project requirements ("images don't need to be persistent").
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 16.1.6 (App Router, TypeScript) |
+| UI | Ant Design v6 + Tailwind CSS v4 |
+| ORM | Prisma v7 |
+| Database | PostgreSQL (Neon recommended) |
+| Validation | Zod v4 |
+| Deployment | Vercel |
+
+---
+
+## API Reference
+
+### `GET /api/photos`
+
+Returns all photos with their comments. Image binary is excluded for performance.
+
+**Response `200`**
+
+```json
+[
+  {
+    "id": 1,
+    "url": "/api/uploads/1710000000000-abc123.jpg",
+    "filename": "my-photo.jpg",
+    "createdAt": "2026-03-11T14:00:00.000Z",
+    "user": { "name": "Guest" },
+    "comments": [
+      {
+        "id": 1,
+        "content": "Nice photo!",
+        "createdAt": "2026-03-11T15:00:00.000Z",
+        "user": { "name": "Guest" }
+      }
+    ]
+  }
+]
+```
+
+---
+
+### `POST /api/photos`
+
+Upload a new photo. Accepts `multipart/form-data`.
+
+**Request**
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `file` | `File` | Image only · Max 10 MB · JPEG, PNG, GIF, WebP, AVIF |
+
+**Response `201`**
+
+```json
+{
+  "id": 1,
+  "url": "/api/uploads/1710000000000-abc123.jpg",
+  "filename": "my-photo.jpg",
+  "createdAt": "2026-03-11T14:00:00.000Z"
+}
+```
+
+**Error `400`** — validation failed
+
+```json
+{ "error": { "file": ["File size must be 10MB or less"] } }
+```
+
+---
+
+### `GET /api/uploads/[filename]`
+
+Serves an uploaded image from the database.
+
+- **Response `200`** — raw image bytes with correct `Content-Type` header
+- **Response `404`** — `{ "error": "Not found" }`
+
+---
+
+### `POST /api/photos/[id]/comments`
+
+Add a comment to a photo.
+
+**Request body**
+
+```json
+{ "content": "Amazing shot!" }
+```
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `content` | `string` | 1–1000 characters |
+
+**Response `201`**
+
+```json
+{
+  "id": 5,
+  "content": "Amazing shot!",
+  "createdAt": "2026-03-11T16:00:00.000Z",
+  "user": { "name": "Guest" }
+}
+```
+
+**Response `404`** — `{ "error": "Photo not found" }`
 
 ---
 
@@ -27,12 +129,12 @@ A full-stack Next.js application where users can upload photos and add comments 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL database (local or cloud — e.g. [Neon](https://neon.tech), [Supabase](https://supabase.com))
+- PostgreSQL (local install, or cloud — [Neon](https://neon.tech) free tier)
 
 ### 1. Clone the repo
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/ZekromNguyen/photo-app.git
 cd photo-app
 ```
 
@@ -58,7 +160,7 @@ Replace the placeholder values with your actual PostgreSQL connection string.
 npx prisma migrate dev
 ```
 
-This creates the `User`, `Photo`, and `Comment` tables.
+Creates the `User`, `Photo`, and `Comment` tables.
 
 ### 5. Start the development server
 
@@ -70,57 +172,64 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Deployment (Vercel)
+## Deployment (Vercel + Neon)
 
-### 1. Create a PostgreSQL database
+### 1. Create a Neon database
 
-Use [Neon](https://neon.tech) (free tier, serverless Postgres):
-1. Sign up at neon.tech
+1. Sign up at [neon.tech](https://neon.tech) (free tier)
 2. Create a new project
-3. Copy the connection string from the dashboard
+3. Copy the connection string: `postgresql://user:pass@host/neondb?sslmode=require`
 
 ### 2. Deploy to Vercel
 
+Push to GitHub and import at [vercel.com/new](https://vercel.com/new), **or** use the CLI:
+
 ```bash
-npm install -g vercel
-vercel
+npx vercel
 ```
 
-Or connect your GitHub repo directly at [vercel.com](https://vercel.com).
+### 3. Set environment variable in Vercel
 
-### 3. Set environment variables in Vercel
-
-In the Vercel dashboard → Project → Settings → Environment Variables, add:
+Vercel dashboard → Project → **Settings** → **Environment Variables**:
 
 | Name | Value |
 |------|-------|
-| `DATABASE_URL` | Your Neon (or other) PostgreSQL connection string |
+| `DATABASE_URL` | Your Neon PostgreSQL connection string |
 
-### 4. Run migrations against the production database
+### 4. Run production migrations (first time only)
+
+Create the tables in your Neon database before first use:
+
+```powershell
+# PowerShell
+$env:DATABASE_URL="postgresql://..."; npx prisma migrate deploy
+```
 
 ```bash
-DATABASE_URL="your-production-url" npx prisma migrate deploy
+# Bash / macOS / Linux
+DATABASE_URL="postgresql://..." npx prisma migrate deploy
 ```
 
 ### 5. Redeploy
 
-Trigger a redeploy from the Vercel dashboard (or push a new commit). The app will be live.
+Trigger a redeploy from the Vercel dashboard (or push a new commit).
+
+> **Note**: Subsequent deploys automatically run `prisma migrate deploy && next build` via the `build` script — no manual migration needed after the first time.
 
 ---
 
 ## Available Scripts
 
-```bash
-npm run dev       # Start dev server (http://localhost:3000)
-npm run build     # Production build
-npm run start     # Start production server
-npm run lint      # ESLint
-
-npx prisma generate        # Regenerate Prisma client
-npx prisma migrate dev     # Run migrations (development)
-npx prisma migrate deploy  # Run migrations (production)
-npx prisma studio          # Open Prisma Studio GUI
-```
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server (http://localhost:3000) |
+| `npm run build` | Production build (runs migrations first) |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npx prisma generate` | Regenerate Prisma client |
+| `npx prisma migrate dev` | Run migrations (development) |
+| `npx prisma migrate deploy` | Run migrations (production) |
+| `npx prisma studio` | Open Prisma Studio GUI |
 
 ---
 
@@ -129,23 +238,26 @@ npx prisma studio          # Open Prisma Studio GUI
 ```
 photo-app/
 ├── app/
-│   ├── layout.tsx              # Root layout (fonts, Ant Design provider)
-│   ├── page.tsx                # Home page — upload form + gallery
-│   ├── globals.css             # Tailwind + CSS variables
+│   ├── page.tsx                    # Home page — gallery + upload
+│   ├── layout.tsx                  # Root layout (fonts, Ant Design provider)
+│   ├── globals.css                 # Global styles
+│   ├── components/
+│   │   ├── UploadForm.tsx          # Drag-and-drop upload UI
+│   │   ├── PhotoCard.tsx           # Individual photo card with comments
+│   │   └── CommentSection.tsx      # Comment list + add comment input
 │   └── api/
 │       ├── photos/
-│       │   ├── route.ts        # GET /api/photos, POST /api/photos
+│       │   ├── route.ts            # GET /api/photos, POST /api/photos
 │       │   └── [id]/comments/
-│       │       └── route.ts    # POST /api/photos/:id/comments
-│       └── uploads/
-│           └── [filename]/
-│               └── route.ts    # GET /api/uploads/:filename (file serving)
+│       │       └── route.ts        # POST /api/photos/:id/comments
+│       └── uploads/[filename]/
+│           └── route.ts            # GET /api/uploads/:filename
 ├── lib/
-│   └── prisma.ts               # Prisma client singleton
+│   └── prisma.ts                   # Prisma client singleton
 ├── prisma/
-│   ├── schema.prisma           # DB schema (User, Photo, Comment)
-│   └── migrations/
-└── prisma.config.ts            # Prisma v7 config
+│   ├── schema.prisma               # DB schema (User, Photo, Comment)
+│   └── migrations/                 # SQL migration files
+└── prisma.config.ts                # Prisma v7 datasource config
 ```
 
 ## Deploy on Vercel
