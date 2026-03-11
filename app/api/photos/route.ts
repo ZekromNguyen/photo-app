@@ -11,6 +11,16 @@ const UPLOADS_DIR = path.join("/tmp", "uploads");
 
 const DUMMY_USER_ID = 1;
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+]);
+
 async function ensureDummyUser() {
   await prisma.user.upsert({
     where: { id: DUMMY_USER_ID },
@@ -25,7 +35,11 @@ async function ensureDummyUser() {
 }
 
 const uploadSchema = z.object({
-  file: z.instanceof(File).refine((f) => f.size > 0, "File is required"),
+  file: z
+    .instanceof(File)
+    .refine((f) => f.size > 0, "File is required")
+    .refine((f) => f.size <= MAX_FILE_SIZE, "File size must be 10MB or less")
+    .refine((f) => ALLOWED_MIME_TYPES.has(f.type), "Only image files are allowed (JPEG, PNG, GIF, WebP, AVIF)"),
 });
 
 export async function POST(request: NextRequest) {
