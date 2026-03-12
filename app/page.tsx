@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { List, Spin, Empty, Typography, Divider, message } from "antd";
 import { PictureOutlined, CameraOutlined } from "@ant-design/icons";
 import UploadForm from "./components/UploadForm";
@@ -22,27 +22,64 @@ interface Photo {
   }[];
 }
 
+interface PhotoPage {
+  photos: Photo[];
+  nextCursor: number | null;
+  hasMore: boolean;
+}
+
 export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const fetchPhotos = async () => {
+  const fetchPage = useCallback(async (cursor: number | null, replace: boolean) => {
+    const url = cursor ? `/api/photos?cursor=${cursor}` : "/api/photos";
     try {
-      const response = await fetch("/api/photos");
-      if (!response.ok) throw new Error("Failed to fetch photos");
-      const data = await response.json();
-      setPhotos(data);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch photos");
+      const data: PhotoPage = await res.json();
+      setPhotos((prev) => replace ? data.photos : [...prev, ...data.photos]);
+      setNextCursor(data.nextCursor);
+      setHasMore(data.hasMore);
     } catch (error) {
       message.error("Failed to load photos");
       console.error(error);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPhotos();
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    setLoading(true);
+    fetchPage(null, true).finally(() => setLoading(false));
+  }, [fetchPage]);
+
+  // Refresh from scratch (e.g. after upload/delete)
+  const fetchPhotos = useCallback(async () => {
+    await fetchPage(null, true);
+  }, [fetchPage]);
+
+  // IntersectionObserver — fires when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          setLoadingMore(true);
+          fetchPage(nextCursor, false).finally(() => setLoadingMore(false));
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, nextCursor, fetchPage]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -110,7 +147,7 @@ export default function Home() {
             >
               <PictureOutlined style={{ color: "#fff", fontSize: 14 }} />
               <Text style={{ color: "#fff", fontSize: 14, fontWeight: 500 }}>
-                {photos.length} {photos.length === 1 ? "photo" : "photos"} shared
+                {photos.length}{hasMore ? "+" : ""} {photos.length === 1 ? "photo" : "photos"} shared
               </Text>
             </div>
           )}
@@ -148,15 +185,39 @@ export default function Home() {
             }}
           />
         ) : (
-          <List
-            grid={{ gutter: 20, xs: 1, sm: 2, md: 2, lg: 3, xl: 3, xxl: 4 }}
-            dataSource={photos}
-            renderItem={(photo) => (
-              <List.Item>
-                <PhotoCard photo={photo} onCommentAdded={fetchPhotos} formatDate={formatDate} />
-              </List.Item>
+          <>
+            <List
+              grid={{ gutter: 20, xs: 1, sm: 2, md: 2, lg: 3, xl: 3, xxl: 4 }}
+              dataSource={photos}
+              renderItem={(photo) => (
+                <List.Item>
+                  <PhotoCard
+                    photo={photo}
+                    onCommentAdded={fetchPhotos}
+                    onPhotoDeleted={fetchPhotos}
+                    onPhotoUpdated={fetchPhotos}
+                    formatDate={formatDate}
+                  />
+                </List.Item>
+              )}
+            />
+
+            {/* Sentinel div observed by IntersectionObserver */}
+            <div ref={sentinelRef} style={{ height: 1 }} />
+
+            {loadingMore && (
+              <div style={{ textAlign: "center", padding: "24px 0" }}>
+                <Spin />
+                <div style={{ marginTop: 10, color: "#888", fontSize: 14 }}>Loading more photos…</div>
+              </div>
             )}
-          />
+
+            {!hasMore && photos.length > 0 && (
+              <div style={{ textAlign: "center", padding: "20px 0", color: "#bbb", fontSize: 13 }}>
+                All photos loaded
+              </div>
+            )}
+          </>
         )}
       </div>
 
