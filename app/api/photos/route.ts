@@ -63,7 +63,7 @@ async function saveFile(validFile: File): Promise<{ id: number; url: string; fil
     data: {
       url: `/api/uploads/${filename}`,
       filename: validFile.name,
-      data,
+      data: data as unknown as Uint8Array<ArrayBuffer>,
       mimeType,
       userId: DUMMY_USER_ID,
     },
